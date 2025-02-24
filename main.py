@@ -24,18 +24,20 @@ urls = ['https://nva.nielit.gov.in/', 'https://lms.nielit.gov.in/']
 os.makedirs('output', exist_ok=True)
 os.makedirs('pdfs', exist_ok=True)
 
-def scroll_down_page():
-    """ Scrolls down the page to load dynamic content """
-    last_height = driver.execute_script("return document.body.scrollHeight")
-    while True:
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(20)  # Wait for more content to load
-        new_height = driver.execute_script("return document.body.scrollHeight")
-        if new_height == last_height:
-            break
-        last_height = new_height
+def download_pdf(pdf_url):
+    """ Downloads the PDF from the given URL """
+    if pdf_url and pdf_url.endswith('.pdf'):
+        pdf_name = os.path.join('pdfs', pdf_url.split('/')[-1])
+        if not os.path.exists(pdf_name):
+            print(f"Downloading: {pdf_name}")
+            response = requests.get(pdf_url)
+            with open(pdf_name, 'wb') as pdf_file:
+                pdf_file.write(response.content)
+            print(f"Downloaded: {pdf_name}")
+        else:
+            print(f"Already downloaded: {pdf_name}")
 
-def scrape_text_and_pdfs(url):
+def scrape(url):
     driver.get(url)
     time.sleep(15)  # Wait for dynamic content to load
     
@@ -54,41 +56,41 @@ def scrape_text_and_pdfs(url):
         f.write(f"\n\n=== {url} ===\n\n")
         f.write("\n".join(text_data))
 
-    # Click on "Click Here to See Detail" to trigger PDF load
-    more_details_links = driver.find_elements(By.XPATH, "//a[text()='Click Here to See Detail']")
-    for link in more_details_links:
+    # Find all links that contain the text "Click Here to See Detail"
+    detail_links = driver.find_elements(By.XPATH, "//a[contains(text(),'Click Here to See Detail')]")
+    print(f"Found {len(detail_links)} links with 'Click Here to See Detail' on {url}")
+
+    for index, link in enumerate(detail_links):
         try:
-            # Click on the link
+            # Scroll to the link first
+            driver.execute_script("arguments[0].scrollIntoView(true);", link)
+            time.sleep(2)
+            
+            # Click the link to trigger the JavaScript
+            print(f"Clicking on link {index + 1}")
             ActionChains(driver).move_to_element(link).click(link).perform()
-            time.sleep(5)  # Wait for the content to load
+            time.sleep(5)  # Wait for new window/tab to open
+            
+            # Switch to new window
+            driver.switch_to.window(driver.window_handles[-1])
+            new_url = driver.current_url
+            print(f"New URL after clicking: {new_url}")
+            
+            # Check if it's a PDF
+            if new_url.endswith('.pdf'):
+                download_pdf(new_url)
+            else:
+                print(f"New URL is not a direct PDF: {new_url}")
 
-            # Switch to new tab if it opens one
-            windows = driver.window_handles
-            driver.switch_to.window(windows[-1])
-
-            # Check if a PDF is loaded
-            pdf_elements = driver.find_elements(By.XPATH, "//a[contains(@href, '.pdf')]")
-            for pdf in pdf_elements:
-                pdf_url = pdf.get_attribute('href')
-                if pdf_url and pdf_url.endswith('.pdf'):
-                    pdf_name = os.path.join('pdfs', pdf_url.split('/')[-1])
-                    if not os.path.exists(pdf_name):
-                        print(f"Downloading: {pdf_name}")
-                        response = requests.get(pdf_url)
-                        with open(pdf_name, 'wb') as pdf_file:
-                            pdf_file.write(response.content)
-                        print(f"Downloaded: {pdf_name}")
-
-            # Close the tab and switch back to the main window
-            if len(windows) > 1:
-                driver.close()
-                driver.switch_to.window(windows[0])
+            # Close the new window and switch back to the main one
+            driver.close()
+            driver.switch_to.window(driver.window_handles[0])
 
         except Exception as e:
-            print(f"Error while clicking link: {e}")
+            print(f"Error while clicking link {index + 1}: {e}")
 
 # Start scraping
 for url in urls:
-    scrape_text_and_pdfs(url)
+    scrape(url)
 
 driver.quit()
