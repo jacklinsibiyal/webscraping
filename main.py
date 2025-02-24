@@ -6,7 +6,8 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
 
 # Setup Selenium WebDriver
@@ -19,6 +20,7 @@ driver = webdriver.Chrome(service=ChromeService(ChromeDriverManager().install())
 # URLs to scrape
 urls = ['https://nva.nielit.gov.in/', 'https://lms.nielit.gov.in/']
 
+# Create output directories if they don't exist
 os.makedirs('output', exist_ok=True)
 os.makedirs('pdfs', exist_ok=True)
 
@@ -52,18 +54,38 @@ def scrape_text_and_pdfs(url):
         f.write(f"\n\n=== {url} ===\n\n")
         f.write("\n".join(text_data))
 
-    # Download PDFs
-    pdf_links = driver.find_elements(By.XPATH, "//a[contains(@href, '.pdf') or contains(@href, 'download')]")
-    for link in pdf_links:
-        pdf_url = link.get_attribute('href')
-        if pdf_url and pdf_url.endswith('.pdf'):
-            pdf_name = os.path.join('pdfs', pdf_url.split('/')[-1])
-            if not os.path.exists(pdf_name):
-                print(f"Downloading: {pdf_name}")
-                response = requests.get(pdf_url)
-                with open(pdf_name, 'wb') as pdf_file:
-                    pdf_file.write(response.content)
-                print(f"Downloaded: {pdf_name}")
+    # Click on "Click Here to See Detail" to trigger PDF load
+    more_details_links = driver.find_elements(By.XPATH, "//a[text()='Click Here to See Detail']")
+    for link in more_details_links:
+        try:
+            # Click on the link
+            ActionChains(driver).move_to_element(link).click(link).perform()
+            time.sleep(5)  # Wait for the content to load
+
+            # Switch to new tab if it opens one
+            windows = driver.window_handles
+            driver.switch_to.window(windows[-1])
+
+            # Check if a PDF is loaded
+            pdf_elements = driver.find_elements(By.XPATH, "//a[contains(@href, '.pdf')]")
+            for pdf in pdf_elements:
+                pdf_url = pdf.get_attribute('href')
+                if pdf_url and pdf_url.endswith('.pdf'):
+                    pdf_name = os.path.join('pdfs', pdf_url.split('/')[-1])
+                    if not os.path.exists(pdf_name):
+                        print(f"Downloading: {pdf_name}")
+                        response = requests.get(pdf_url)
+                        with open(pdf_name, 'wb') as pdf_file:
+                            pdf_file.write(response.content)
+                        print(f"Downloaded: {pdf_name}")
+
+            # Close the tab and switch back to the main window
+            if len(windows) > 1:
+                driver.close()
+                driver.switch_to.window(windows[0])
+
+        except Exception as e:
+            print(f"Error while clicking link: {e}")
 
 # Start scraping
 for url in urls:
