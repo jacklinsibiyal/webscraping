@@ -24,6 +24,17 @@ urls = ['https://nva.nielit.gov.in/', 'https://lms.nielit.gov.in/']
 os.makedirs('output', exist_ok=True)
 os.makedirs('pdfs', exist_ok=True)
 
+def scroll_down_page():
+    """ Scrolls down the page to load dynamic content """
+    last_height = driver.execute_script("return document.body.scrollHeight")
+    while True:
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(20)  # Wait for more content to load
+        new_height = driver.execute_script("return document.body.scrollHeight")
+        if new_height == last_height:
+            break
+        last_height = new_height
+
 def download_pdf(pdf_url):
     """ Downloads the PDF from the given URL """
     if pdf_url and pdf_url.endswith('.pdf'):
