@@ -26,7 +26,7 @@ jobs:
 
       - name: Run Web Scraper
         run: |
-          python main.py
+          python scrape.py
 
       - name: Upload Output
         uses: actions/upload-artifact@v4
